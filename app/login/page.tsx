@@ -9,7 +9,14 @@ export default async function LoginPage({
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/admin')
+  if (user) {
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_superadmin')
+        .eq('id', user.id)
+        .single()
+    if (profile?.is_superadmin) redirect('/admin')
+  }
 
   const params = await searchParams
   const error = params.error
