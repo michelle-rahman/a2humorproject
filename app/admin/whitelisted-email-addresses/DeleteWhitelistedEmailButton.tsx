@@ -11,7 +11,7 @@ export default function DeleteWhitelistedEmailButton({ emailId }: { emailId: str
         .delete()
         .eq('id', emailId);
 
-      if (error) {.
+      if (error) {
         alert(`Failed to delete email: ${error.message}`);
       } else {
         revalidatePath('/admin/whitelisted-email-addresses');
