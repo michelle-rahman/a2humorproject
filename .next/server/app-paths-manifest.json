@@ -1,9 +1,0 @@
-{
-  "/auth/callback/route": "app/auth/callback/route.js",
-  "/login/page": "app/login/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/admin/captions/page": "app/admin/captions/page.js",
-  "/admin/images/[id]/edit/page": "app/admin/images/[id]/edit/page.js",
-  "/admin/users/page": "app/admin/users/page.js",
-  "/admin/images/page": "app/admin/images/page.js"
-}

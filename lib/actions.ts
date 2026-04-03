@@ -69,3 +69,49 @@ export async function deleteImage(id: string) {
   revalidatePath('/admin/images')
   redirect('/admin/images')
 }
+
+export async function createAllowedDomain(formData: FormData) {
+  const apex_domain = formData.get('apex_domain') as string
+
+  const { error } = await adminClient.from('allowed_signup_domains').insert({
+    apex_domain,
+    created_datetime_utc: new Date().toISOString(),
+  })
+
+  if (error) {
+    throw new Error(`Failed to create allowed domain: ${error.message}`)
+  }
+
+  revalidatePath('/admin/allowed-signup-domains')
+  redirect('/admin/allowed-signup-domains')
+}
+
+export async function updateAllowedDomain(id: string, formData: FormData) {
+  const apex_domain = formData.get('apex_domain') as string
+
+  const { error } = await adminClient
+    .from('allowed_signup_domains')
+    .update({
+      apex_domain,
+      modified_datetime_utc: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (error) {
+    throw new Error(`Failed to update allowed domain: ${error.message}`)
+  }
+
+  revalidatePath('/admin/allowed-signup-domains')
+  redirect('/admin/allowed-signup-domains')
+}
+
+export async function deleteAllowedDomain(id: string) {
+  const { error } = await adminClient.from('allowed_signup_domains').delete().eq('id', id)
+
+  if (error) {
+    throw new Error(`Failed to delete allowed domain: ${error.message}`)
+  }
+
+  revalidatePath('/admin/allowed-signup-domains')
+  redirect('/admin/allowed-signup-domains')
+}
