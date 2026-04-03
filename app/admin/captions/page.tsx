@@ -10,7 +10,7 @@ export default async function CaptionsPage({
   const filter = params.filter ?? 'all'
   const q = params.q ?? ''
 
-  let query = adminClient.from('captions').select('*, profiles(first_name, last_name, email)')
+  let query = adminClient.from('captions').select('*')
 
   if (filter === 'featured') query = query.eq('is_featured', true)
   if (filter === 'public') query = query.eq('is_public', true)
@@ -103,10 +103,7 @@ export default async function CaptionsPage({
               </tr>
             )}
             {captions?.map((caption) => {
-              const profile = caption.profiles as { first_name: string | null; last_name: string | null; email: string | null } | null
-              const authorName = profile
-                ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.email || 'Unknown'
-                : caption.profile_id?.slice(0, 8) + '...'
+              const authorName = caption.profile_id?.slice(0, 8) + '...'
 
               return (
                 <tr key={caption.id}>

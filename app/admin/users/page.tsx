@@ -11,7 +11,7 @@ export default async function UsersPage({
 
   let query = adminClient
     .from('profiles')
-    .select('*')
+    .select('id, first_name, last_name, email, is_superadmin, is_in_study, created_datetime_utc')
     .order('created_datetime_utc', { ascending: false })
 
   if (q) {
@@ -19,7 +19,6 @@ export default async function UsersPage({
   }
   if (filter === 'superadmin') query = query.eq('is_superadmin', true)
   if (filter === 'study') query = query.eq('is_in_study', true)
-  if (filter === 'matrix') query = query.eq('is_matrix_admin', true)
 
   const { data: profiles } = await query.limit(200)
 
@@ -48,7 +47,6 @@ export default async function UsersPage({
             { value: 'all', label: 'All' },
             { value: 'superadmin', label: 'Superadmin' },
             { value: 'study', label: 'In Study' },
-            { value: 'matrix', label: 'Matrix Admin' },
           ].map((f) => (
             <a
               key={f.value}
@@ -70,55 +68,55 @@ export default async function UsersPage({
               <th>Email</th>
               <th>Roles</th>
               <th>Joined</th>
-              <th style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>ID</th>
             </tr>
           </thead>
           <tbody>
             {profiles?.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-state">No profiles found</td>
+                <td colSpan={4} className="empty-state">No profiles found</td>
               </tr>
             )}
-            {profiles?.map((profile) => (
-              <tr key={profile.id}>
-                <td>
-                  <span style={{ fontWeight: 500, color: 'var(--text)' }}>
-                    {[profile.first_name, profile.last_name].filter(Boolean).join(' ') || (
-                      <span className="text-muted" style={{ fontStyle: 'italic' }}>Unnamed</span>
+            {profiles?.map((profile) => {
+              const name = [profile.first_name, profile.last_name].filter(Boolean).join(' ')
+              return (
+                <tr key={profile.id}>
+                  <td>
+                    {name ? (
+                      <span style={{ fontWeight: 500, color: 'var(--text)' }}>
+                        {name}
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontStyle: 'italic' }}>
+                        Name Unavailable
+                      </span>
                     )}
-                  </span>
-                </td>
-                <td>
-                  <span className="mono" style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                    {profile.email ?? '—'}
-                  </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {profile.is_superadmin && <span className="badge badge-amber">superadmin</span>}
-                    {profile.is_in_study && <span className="badge badge-green">study</span>}
-                    {profile.is_matrix_admin && <span className="badge badge-blue">matrix</span>}
-                    {!profile.is_superadmin && !profile.is_in_study && !profile.is_matrix_admin && (
-                      <span className="badge badge-gray">user</span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <span className="mono text-muted" style={{ fontSize: '11px' }}>
-                    {profile.created_datetime_utc
-                      ? new Date(profile.created_datetime_utc).toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric', year: 'numeric',
-                        })
-                      : '—'}
-                  </span>
-                </td>
-                <td>
-                  <span className="mono text-muted" style={{ fontSize: '10px' }}>
-                    {profile.id.slice(0, 8)}...
-                  </span>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td>
+                    <span className="mono" style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                      {profile.email ?? '—'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {profile.is_superadmin && <span className="badge badge-amber">superadmin</span>}
+                      {profile.is_in_study && <span className="badge badge-green">study</span>}
+                      {!profile.is_superadmin && !profile.is_in_study && (
+                        <span className="badge badge-gray">user</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="mono text-muted" style={{ fontSize: '11px' }}>
+                      {profile.created_datetime_utc
+                        ? new Date(profile.created_datetime_utc).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric',
+                          })
+                        : '—'}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

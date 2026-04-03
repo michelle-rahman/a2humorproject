@@ -132,7 +132,7 @@ html, body {
   margin-bottom: 36px;
 }
 .page-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 26px;
   font-weight: 700;
   color: var(--text);
@@ -173,7 +173,7 @@ html, body {
   margin-bottom: 10px;
 }
 .stat-value {
-  font-family: 'Syne', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 32px;
   font-weight: 800;
   color: var(--text);
@@ -406,7 +406,7 @@ html, body {
   margin-bottom: 12px;
 }
 .login-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.03em;

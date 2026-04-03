@@ -1,6 +1,7 @@
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
-import { deleteImage } from '@/lib/actions'
+import ImageWithFallback from './ImageWithFallback'
+import DeleteButton from './DeleteButton'
 
 export default async function ImagesPage({
   searchParams,
@@ -80,23 +81,7 @@ export default async function ImagesPage({
         {images?.map((image) => (
           <div key={image.id} className="image-card">
             {image.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={image.url}
-                alt={image.image_description ?? 'Image'}
-                className="image-preview"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement
-                  target.style.display = 'none'
-                  const parent = target.parentElement
-                  if (parent) {
-                    const div = document.createElement('div')
-                    div.className = 'image-no-preview'
-                    div.textContent = 'preview unavailable'
-                    parent.insertBefore(div, target.nextSibling)
-                  }
-                }}
-              />
+              <ImageWithFallback src={image.url} alt={image.image_description ?? 'Image'} />
             ) : (
               <div className="image-no-preview">no url</div>
             )}
@@ -123,20 +108,7 @@ export default async function ImagesPage({
                 >
                   Edit
                 </Link>
-                <form action={deleteImage.bind(null, image.id)} style={{ flex: 1 }}>
-                  <button
-                    type="submit"
-                    className="btn btn-danger btn-sm"
-                    style={{ width: '100%', justifyContent: 'center' }}
-                    onClick={(e) => {
-                      if (!confirm('Delete this image? This cannot be undone.')) {
-                        e.preventDefault()
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                </form>
+                <DeleteButton imageId={image.id} />
               </div>
             </div>
           </div>
