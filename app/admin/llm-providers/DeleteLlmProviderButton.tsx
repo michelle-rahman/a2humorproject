@@ -1,27 +1,23 @@
 'use client'
 
-import { adminClient } from '@/lib/supabase/admin'
-import { revalidatePath } from 'next/cache'
+import { deleteLlmProvider } from '@/lib/actions/llm'
 
 export default function DeleteLlmProviderButton({ providerId }: { providerId: string }) {
-  const deleteProvider = async () => {
-    if (confirm('Are you sure you want to delete this LLM provider?')) {
-      const { error } = await adminClient
-        .from('llm_providers')
-        .delete()
-        .eq('id', providerId);
-
-      if (error) {
-        alert(`Failed to delete LLM provider: ${error.message}`);
-      } else {
-        revalidatePath('/admin/llm-providers');
-      }
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!confirm('Delete this LLM provider? This cannot be undone.')) {
+      e.preventDefault()
     }
-  };
+  }
 
   return (
-    <button onClick={deleteProvider} className="btn btn-danger btn-sm">
-      Delete
-    </button>
-  );
+    <form action={deleteLlmProvider.bind(null, providerId)}>
+      <button
+        type="submit"
+        className="btn btn-danger btn-sm"
+        onClick={handleClick}
+      >
+        Delete
+      </button>
+    </form>
+  )
 }

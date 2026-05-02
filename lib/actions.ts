@@ -4,8 +4,37 @@ import { adminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+async function uploadImageFile(file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+  const { data, error: uploadError } = await adminClient.storage
+    .from('images')
+    .upload(fileName, file, { contentType: file.type, upsert: false })
+
+  if (uploadError) {
+    throw new Error(`Failed to upload image file: ${uploadError.message}`)
+  }
+
+  const { data: { publicUrl } } = adminClient.storage
+    .from('images')
+    .getPublicUrl(data.path)
+
+  return publicUrl
+}
+
 export async function createImage(formData: FormData) {
-  const url = formData.get('url') as string
+  const file = formData.get('file') as File | null
+  let url = formData.get('url') as string
+
+  if (file && file.size > 0) {
+    url = await uploadImageFile(file)
+  }
+
+  if (!url) {
+    throw new Error('Either a file upload or URL is required')
+  }
+
   const additional_context = formData.get('additional_context') as string
   const image_description = formData.get('image_description') as string
   const celebrity_recognition = formData.get('celebrity_recognition') as string
@@ -31,7 +60,17 @@ export async function createImage(formData: FormData) {
 }
 
 export async function updateImage(id: string, formData: FormData) {
-  const url = formData.get('url') as string
+  const file = formData.get('file') as File | null
+  let url = formData.get('url') as string
+
+  if (file && file.size > 0) {
+    url = await uploadImageFile(file)
+  }
+
+  if (!url) {
+    throw new Error('Either a file upload or URL is required')
+  }
+
   const additional_context = formData.get('additional_context') as string
   const image_description = formData.get('image_description') as string
   const celebrity_recognition = formData.get('celebrity_recognition') as string
@@ -114,4 +153,47 @@ export async function deleteAllowedDomain(id: string) {
 
   revalidatePath('/admin/allowed-signup-domains')
   redirect('/admin/allowed-signup-domains')
+}
+
+export async function createWhitelistedEmail(formData: FormData) {
+  const email_address = formData.get('email_address') as string
+
+  const { error } = await adminClient.from('whitelisted_email_addresses').insert({
+    email_address,
+    created_datetime_utc: new Date().toISOString(),
+  })
+
+  if (error) {
+    throw new Error(`Failed to create whitelisted email: ${error.message}`)
+  }
+
+  revalidatePath('/admin/whitelisted-email-addresses')
+  redirect('/admin/whitelisted-email-addresses')
+}
+
+export async function updateWhitelistedEmail(id: string, formData: FormData) {
+  const email_address = formData.get('email_address') as string
+
+  const { error } = await adminClient
+    .from('whitelisted_email_addresses')
+    .update({ email_address })
+    .eq('id', id)
+
+  if (error) {
+    throw new Error(`Failed to update whitelisted email: ${error.message}`)
+  }
+
+  revalidatePath('/admin/whitelisted-email-addresses')
+  redirect('/admin/whitelisted-email-addresses')
+}
+
+export async function deleteWhitelistedEmail(id: string) {
+  const { error } = await adminClient.from('whitelisted_email_addresses').delete().eq('id', id)
+
+  if (error) {
+    throw new Error(`Failed to delete whitelisted email: ${error.message}`)
+  }
+
+  revalidatePath('/admin/whitelisted-email-addresses')
+  redirect('/admin/whitelisted-email-addresses')
 }

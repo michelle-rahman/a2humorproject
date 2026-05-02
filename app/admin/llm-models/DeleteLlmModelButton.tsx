@@ -1,27 +1,23 @@
 'use client'
 
-import { adminClient } from '@/lib/supabase/admin'
-import { revalidatePath } from 'next/cache'
+import { deleteLlmModel } from '@/lib/actions/llm'
 
 export default function DeleteLlmModelButton({ modelId }: { modelId: string }) {
-  const deleteModel = async () => {
-    if (confirm('Are you sure you want to delete this LLM model?')) {
-      const { error } = await adminClient
-        .from('llm_models')
-        .delete()
-        .eq('id', modelId);
-
-      if (error) {
-        alert(`Failed to delete LLM model: ${error.message}`);
-      } else {
-        revalidatePath('/admin/llm-models');
-      }
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!confirm('Delete this LLM model? This cannot be undone.')) {
+      e.preventDefault()
     }
-  };
+  }
 
   return (
-    <button onClick={deleteModel} className="btn btn-danger btn-sm">
-      Delete
-    </button>
-  );
+    <form action={deleteLlmModel.bind(null, modelId)}>
+      <button
+        type="submit"
+        className="btn btn-danger btn-sm"
+        onClick={handleClick}
+      >
+        Delete
+      </button>
+    </form>
+  )
 }

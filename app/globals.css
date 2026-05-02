@@ -51,7 +51,7 @@ html, body {
 
 .admin-nav {
   width: 220px;
-  min-height: 100vh;
+  height: 100vh;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -60,6 +60,7 @@ html, body {
   top: 0;
   left: 0;
   z-index: 10;
+  overflow: hidden;
 }
 
 .admin-main {
@@ -95,6 +96,25 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.nav-section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 12px 4px;
+  opacity: 0.6;
 }
 
 .nav-link {
@@ -349,6 +369,12 @@ html, body {
 }
 .form-textarea { resize: vertical; min-height: 80px; }
 .form-select { cursor: pointer; }
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 8px;
+}
 
 .form-toggle-row {
   display: flex;

@@ -1,27 +1,23 @@
 'use client'
 
-import { adminClient } from '@/lib/supabase/admin'
-import { revalidatePath } from 'next/cache'
+import { deleteAllowedDomain } from '@/lib/actions'
 
 export default function DeleteDomainButton({ domainId }: { domainId: string }) {
-  const deleteDomain = async () => {
-    if (confirm('Are you sure you want to delete this domain?')) {
-      const { error } = await adminClient
-        .from('allowed_signup_domains')
-        .delete()
-        .eq('id', domainId);
-
-      if (error) {
-        alert(`Failed to delete domain: ${error.message}`);
-      } else {
-        revalidatePath('/admin/allowed-signup-domains');
-      }
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!confirm('Delete this domain? This cannot be undone.')) {
+      e.preventDefault()
     }
-  };
+  }
 
   return (
-    <button onClick={deleteDomain} className="btn btn-danger btn-sm">
-      Delete
-    </button>
-  );
+    <form action={deleteAllowedDomain.bind(null, domainId)}>
+      <button
+        type="submit"
+        className="btn btn-danger btn-sm"
+        onClick={handleClick}
+      >
+        Delete
+      </button>
+    </form>
+  )
 }
