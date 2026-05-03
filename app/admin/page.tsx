@@ -47,10 +47,21 @@ async function getDashboardStats() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
 
-  const topIds = sortedProfiles.map(([id]) => id)
-  const { data: profileNames } = topIds.length
-    ? await adminClient.from('profiles').select('id, first_name, last_name, email').in('id', topIds)
+  // Collect all profile IDs we need to look up (captioners + top rated caption authors)
+  const captionerIds = sortedProfiles.map(([id]) => id)
+  const ratedAuthorIds = (topRatedCaptions ?? []).map((c) => c.profile_id).filter(Boolean) as string[]
+  const allProfileIds = [...new Set([...captionerIds, ...ratedAuthorIds])]
+
+  const { data: profileNames } = allProfileIds.length
+    ? await adminClient.from('profiles').select('id, first_name, last_name, email').in('id', allProfileIds)
     : { data: [] }
+
+  const resolveAuthor = (id: string | null) => {
+    if (!id) return 'Unknown'
+    const p = profileNames?.find((x) => x.id === id)
+    if (!p) return 'Unknown'
+    return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || 'Anonymous'
+  }
 
   const leaderboard = sortedProfiles.map(([id, count]) => {
     const p = profileNames?.find((x) => x.id === id)
@@ -95,7 +106,10 @@ async function getDashboardStats() {
     rated6to10,
     ratedOver10,
     ratedPct,
-    topRatedCaptions: topRatedCaptions ?? [],
+    topRatedCaptions: (topRatedCaptions ?? []).map((c) => ({
+      ...c,
+      authorName: resolveAuthor(c.profile_id),
+    })),
     leaderboard,
     recentCaptions: recentCaptions ?? 0,
     priorCaptions: priorCaptions ?? 0,
@@ -122,151 +136,95 @@ export default async function DashboardPage() {
       {/* Top stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-label">Total Profiles</div>
+          <div className="stat-label">Registered Users</div>
           <div className="stat-value">{stats.totalProfiles.toLocaleString()}</div>
-          <div className="stat-sub">{stats.studyRate}% in study</div>
+          <div className="stat-sub">{stats.studyRate}% enrolled in study</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Total Captions</div>
+          <div className="stat-label">Captions Written</div>
           <div className="stat-value accent">{stats.totalCaptions.toLocaleString()}</div>
           <div className={`stat-delta ${velocityUp ? 'up' : 'down'}`}>
-            {velocityUp ? '↑' : '↓'} {Math.abs(velocityDelta)} this week
+            {velocityUp ? '↑' : '↓'} {Math.abs(velocityDelta)} vs last week
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Total Images</div>
+          <div className="stat-label">Images in Library</div>
           <div className="stat-value">{stats.totalImages.toLocaleString()}</div>
-          <div className="stat-sub">{stats.commonImages} common-use</div>
+          <div className="stat-sub">{stats.commonImages} available to all users</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Total Likes</div>
+          <div className="stat-label">Total Likes Given</div>
           <div className="stat-value">{stats.totalLikes.toLocaleString()}</div>
-          <div className="stat-sub">avg {stats.avgLikes} per caption</div>
+          <div className="stat-sub">avg {stats.avgLikes} likes per caption</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Rated Captions</div>
+          <div className="stat-label">Captions Liked</div>
           <div className="stat-value accent">{stats.ratedPct}%</div>
-          <div className="stat-sub">{stats.totalRated.toLocaleString()} of {stats.totalCaptions.toLocaleString()} liked</div>
+          <div className="stat-sub">{stats.totalRated.toLocaleString()} of {stats.totalCaptions.toLocaleString()} have at least 1 like</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Study Participation</div>
+          <div className="stat-label">Study Enrollment</div>
           <div className="stat-value">{stats.studyRate}%</div>
-          <div className="stat-sub">{stats.studyUsers} / {stats.totalProfiles} enrolled</div>
+          <div className="stat-sub">{stats.studyUsers} of {stats.totalProfiles} users in the study</div>
         </div>
       </div>
 
-      {/* Rating Statistics */}
-      <div className="section" style={{ marginBottom: '24px' }}>
-        <div className="section-header">
-          <span className="section-title">Caption Rating Distribution</span>
-          <span className="badge badge-amber">{stats.totalRated} rated · {stats.unrated} unrated</span>
-        </div>
-        <div className="bar-chart">
-          <div className="bar-row">
-            <span className="bar-label" style={{ color: 'var(--text-muted)' }}>0 likes</span>
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${(stats.unrated / maxBucket) * 100}%`, background: 'var(--text-muted)' }} />
-            </div>
-            <span className="bar-value">{stats.unrated}</span>
-          </div>
-          <div className="bar-row">
-            <span className="bar-label" style={{ color: '#60a5fa' }}>1–5 likes</span>
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${(stats.rated1to5 / maxBucket) * 100}%`, background: '#60a5fa' }} />
-            </div>
-            <span className="bar-value">{stats.rated1to5}</span>
-          </div>
-          <div className="bar-row">
-            <span className="bar-label" style={{ color: '#34d399' }}>6–10 likes</span>
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${(stats.rated6to10 / maxBucket) * 100}%`, background: '#34d399' }} />
-            </div>
-            <span className="bar-value">{stats.rated6to10}</span>
-          </div>
-          <div className="bar-row">
-            <span className="bar-label" style={{ color: 'var(--accent)' }}>10+ likes</span>
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${(stats.ratedOver10 / maxBucket) * 100}%` }} />
-            </div>
-            <span className="bar-value">{stats.ratedOver10}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Top Rated Captions */}
-      {stats.topRatedCaptions.length > 0 && (
-        <div className="section" style={{ marginBottom: '24px' }}>
-          <div className="section-header">
-            <span className="section-title">Top Rated Captions</span>
-            <span className="badge badge-amber">by likes</span>
-          </div>
-          {stats.topRatedCaptions.map((caption, i) => (
-            <div key={i} className="caption-spotlight" style={{ borderBottom: i < stats.topRatedCaptions.length - 1 ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                <div style={{
-                  fontFamily: 'Syne, sans-serif',
-                  fontSize: '20px',
-                  fontWeight: 800,
-                  color: i === 0 ? 'var(--accent)' : 'var(--text-muted)',
-                  minWidth: '28px',
-                  lineHeight: 1,
-                  paddingTop: '2px',
-                }}>
-                  {i === 0 ? '★' : `${i + 1}`}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="caption-spotlight-content" style={{ marginBottom: '8px' }}>
-                    {caption.content ?? '(no content)'}
-                  </div>
-                  <div className="caption-spotlight-meta">
-                    <span style={{ color: 'var(--accent)', fontWeight: 600 }}>♥ {caption.like_count} likes</span>
-                    <span>author: {caption.profile_id?.slice(0, 8)}...</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="two-col">
-        {/* Leaderboard */}
+      {/* Rating distribution + top rated side by side */}
+      <div className="two-col" style={{ marginBottom: '0' }}>
+        {/* Rating distribution */}
         <div className="section">
           <div className="section-header">
-            <span className="section-title">Top Captioners</span>
-            <span className="badge badge-amber">by caption count</span>
+            <span className="section-title">Like Distribution</span>
+            <span className="badge badge-amber">{stats.totalCaptions} captions total</span>
           </div>
-          {stats.leaderboard.length === 0 ? (
-            <div className="empty-state">no caption data yet</div>
-          ) : (
-            <ul className="leaderboard">
-              {stats.leaderboard.map((entry, i) => (
-                <li key={entry.id} className="leaderboard-item">
-                  <span className={`leaderboard-rank ${i === 0 ? 'top' : ''}`}>
-                    {i === 0 ? '★' : `${i + 1}`}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="leaderboard-name truncate">{entry.name}</div>
-                    <div className="leaderboard-email truncate">{entry.email}</div>
-                  </div>
-                  <div className="leaderboard-count">{entry.count}</div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            How many captions fall into each like-count range
+          </div>
+          <div className="bar-chart">
+            <div className="bar-row">
+              <span className="bar-label" style={{ color: 'var(--text-muted)' }}>No likes</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${(stats.unrated / maxBucket) * 100}%`, background: 'var(--text-muted)' }} />
+              </div>
+              <span className="bar-value">{stats.unrated}</span>
+            </div>
+            <div className="bar-row">
+              <span className="bar-label" style={{ color: '#60a5fa' }}>1–5 likes</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${(stats.rated1to5 / maxBucket) * 100}%`, background: '#60a5fa' }} />
+              </div>
+              <span className="bar-value">{stats.rated1to5}</span>
+            </div>
+            <div className="bar-row">
+              <span className="bar-label" style={{ color: '#34d399' }}>6–10 likes</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${(stats.rated6to10 / maxBucket) * 100}%`, background: '#34d399' }} />
+              </div>
+              <span className="bar-value">{stats.rated6to10}</span>
+            </div>
+            <div className="bar-row">
+              <span className="bar-label" style={{ color: 'var(--accent)' }}>10+ likes</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${(stats.ratedOver10 / maxBucket) * 100}%` }} />
+              </div>
+              <span className="bar-value">{stats.ratedOver10}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Content breakdown */}
+        {/* Caption visibility */}
         <div>
-          {/* Caption visibility */}
           <div className="section" style={{ marginBottom: '24px' }}>
             <div className="section-header">
               <span className="section-title">Caption Visibility</span>
+            </div>
+            <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+              Public captions are visible to all users; private are hidden
             </div>
             <div className="bar-chart">
               <div className="bar-row">
@@ -293,10 +251,12 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* User roles */}
           <div className="section">
             <div className="section-header">
               <span className="section-title">User Roles</span>
+            </div>
+            <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+              Breakdown of user types out of {stats.totalProfiles} total
             </div>
             <div className="bar-chart">
               <div className="bar-row">
@@ -318,24 +278,97 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Weekly velocity detail */}
-      <div className="section" style={{ marginTop: '24px' }}>
-        <div className="section-header">
-          <span className="section-title">Caption Velocity</span>
-          <span className={`badge ${velocityUp ? 'badge-green' : 'badge-red'}`}>
-            {velocityUp ? '↑' : '↓'} week-over-week
-          </span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-          <div style={{ padding: '24px', borderRight: '1px solid var(--border)' }}>
-            <div className="stat-label">Last 7 Days</div>
-            <div className="stat-value accent">{stats.recentCaptions}</div>
-            <div className="stat-sub">captions created</div>
+      {/* Top Rated Captions */}
+      {stats.topRatedCaptions.length > 0 && (
+        <div className="section" style={{ marginTop: '24px', marginBottom: '24px' }}>
+          <div className="section-header">
+            <span className="section-title">Most Liked Captions</span>
+            <span className="badge badge-amber">top 5 by like count</span>
           </div>
-          <div style={{ padding: '24px' }}>
-            <div className="stat-label">Prior 7 Days</div>
-            <div className="stat-value">{stats.priorCaptions}</div>
-            <div className="stat-sub">captions created</div>
+          <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            The captions that received the most likes from other users
+          </div>
+          {stats.topRatedCaptions.map((caption, i) => (
+            <div key={i} className="caption-spotlight" style={{ borderBottom: i < stats.topRatedCaptions.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <div style={{
+                  fontFamily: 'Syne, sans-serif',
+                  fontSize: '20px',
+                  fontWeight: 800,
+                  color: i === 0 ? 'var(--accent)' : 'var(--text-muted)',
+                  minWidth: '28px',
+                  lineHeight: 1,
+                  paddingTop: '2px',
+                }}>
+                  {i === 0 ? '★' : `${i + 1}`}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="caption-spotlight-content" style={{ marginBottom: '8px' }}>
+                    {caption.content ?? '(no content)'}
+                  </div>
+                  <div className="caption-spotlight-meta">
+                    <span style={{ color: 'var(--accent)', fontWeight: 600 }}>♥ {caption.like_count} likes</span>
+                    <span>by {caption.authorName}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="two-col">
+        {/* Most active writers */}
+        <div className="section">
+          <div className="section-header">
+            <span className="section-title">Most Active Writers</span>
+            <span className="badge badge-amber">by captions written</span>
+          </div>
+          <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            Users who have submitted the most captions
+          </div>
+          {stats.leaderboard.length === 0 ? (
+            <div className="empty-state">no caption data yet</div>
+          ) : (
+            <ul className="leaderboard">
+              {stats.leaderboard.map((entry, i) => (
+                <li key={entry.id} className="leaderboard-item">
+                  <span className={`leaderboard-rank ${i === 0 ? 'top' : ''}`}>
+                    {i === 0 ? '★' : `${i + 1}`}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="leaderboard-name truncate">{entry.name}</div>
+                    <div className="leaderboard-email truncate">{entry.email}</div>
+                  </div>
+                  <div className="leaderboard-count" title="captions written">{entry.count}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Weekly caption creation */}
+        <div className="section">
+          <div className="section-header">
+            <span className="section-title">New Captions This Week</span>
+            <span className={`badge ${velocityUp ? 'badge-green' : 'badge-red'}`}>
+              {velocityUp ? '↑' : '↓'} vs prior week
+            </span>
+          </div>
+          <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            How many new captions were submitted each week
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+            <div style={{ padding: '24px', borderRight: '1px solid var(--border)' }}>
+              <div className="stat-label">Last 7 Days</div>
+              <div className="stat-value accent">{stats.recentCaptions}</div>
+              <div className="stat-sub">captions submitted</div>
+            </div>
+            <div style={{ padding: '24px' }}>
+              <div className="stat-label">Prior 7 Days</div>
+              <div className="stat-value">{stats.priorCaptions}</div>
+              <div className="stat-sub">captions submitted</div>
+            </div>
           </div>
         </div>
       </div>
