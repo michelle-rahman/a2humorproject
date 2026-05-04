@@ -45,7 +45,7 @@ export default async function CaptionRequestsPage() {
               </tr>
             ) : (
               requests?.map((request) => {
-                const img = request.images as { url: string; image_description: string } | null
+                const img = request.images as unknown as { url: string; image_description: string } | null
                 return (
                   <tr key={request.id}>
                     <td>
