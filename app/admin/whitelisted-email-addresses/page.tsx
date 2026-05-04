@@ -4,7 +4,7 @@ import DeleteWhitelistedEmailButton from './DeleteWhitelistedEmailButton'
 
 export default async function WhitelistedEmailAddressesPage() {
   const { data: emails, error } = await adminClient
-    .from('whitelisted_email_addresses')
+    .from('whitelist_email_addresses')
     .select('*')
     .order('email_address', { ascending: true });
 

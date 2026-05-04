@@ -158,7 +158,7 @@ export async function deleteAllowedDomain(id: string) {
 export async function createWhitelistedEmail(formData: FormData) {
   const email_address = formData.get('email_address') as string
 
-  const { error } = await adminClient.from('whitelisted_email_addresses').insert({
+  const { error } = await adminClient.from('whitelist_email_addresses').insert({
     email_address,
     created_datetime_utc: new Date().toISOString(),
   })
@@ -175,7 +175,7 @@ export async function updateWhitelistedEmail(id: string, formData: FormData) {
   const email_address = formData.get('email_address') as string
 
   const { error } = await adminClient
-    .from('whitelisted_email_addresses')
+    .from('whitelist_email_addresses')
     .update({ email_address })
     .eq('id', id)
 
@@ -188,7 +188,7 @@ export async function updateWhitelistedEmail(id: string, formData: FormData) {
 }
 
 export async function deleteWhitelistedEmail(id: string) {
-  const { error } = await adminClient.from('whitelisted_email_addresses').delete().eq('id', id)
+  const { error } = await adminClient.from('whitelist_email_addresses').delete().eq('id', id)
 
   if (error) {
     throw new Error(`Failed to delete whitelisted email: ${error.message}`)

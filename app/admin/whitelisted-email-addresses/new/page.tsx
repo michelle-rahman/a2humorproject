@@ -8,7 +8,7 @@ async function createWhitelistedEmail(formData: FormData) {
   const email = formData.get('email') as string;
 
   const { error } = await adminClient
-    .from('whitelisted_email_addresses')
+    .from('whitelist_email_addresses')
     .insert({ email_address: email });
 
   if (error) {

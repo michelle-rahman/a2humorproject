@@ -10,9 +10,7 @@ async function getDashboardStats() {
     { count: studyUsers },
     { count: superadmins },
     { count: commonImages },
-    { data: topRatedCaptions },
     { data: topCaptioners },
-    { data: likesData },
   ] = await Promise.all([
     adminClient.from('profiles').select('*', { count: 'exact', head: true }),
     adminClient.from('images').select('*', { count: 'exact', head: true }),
@@ -22,46 +20,36 @@ async function getDashboardStats() {
     adminClient.from('profiles').select('*', { count: 'exact', head: true }).eq('is_in_study', true),
     adminClient.from('profiles').select('*', { count: 'exact', head: true }).eq('is_superadmin', true),
     adminClient.from('images').select('*', { count: 'exact', head: true }).eq('is_common_use', true),
-    adminClient.from('captions').select('content, like_count, profile_id').order('like_count', { ascending: false }).gt('like_count', 0).limit(5),
     adminClient.from('captions').select('profile_id').not('profile_id', 'is', null),
-    adminClient.from('captions').select('like_count'),
   ])
 
-  // Total likes & distribution
-  const totalLikes = likesData?.reduce((sum, c) => sum + (c.like_count || 0), 0) ?? 0
-  const avgLikes = totalCaptions ? (totalLikes / totalCaptions).toFixed(1) : '0'
+  // Real vote stats via admin RPC functions
+  const [voteSummaryRes, voteDistRes, topRatedRes] = await Promise.all([
+    adminClient.rpc('admin_vote_summary'),
+    adminClient.rpc('admin_vote_distribution'),
+    adminClient.rpc('admin_top_rated_captions'),
+  ])
 
-  const unrated = likesData?.filter(c => !c.like_count || c.like_count === 0).length ?? 0
-  const rated1to5 = likesData?.filter(c => (c.like_count ?? 0) >= 1 && (c.like_count ?? 0) <= 5).length ?? 0
-  const rated6to10 = likesData?.filter(c => (c.like_count ?? 0) >= 6 && (c.like_count ?? 0) <= 10).length ?? 0
-  const ratedOver10 = likesData?.filter(c => (c.like_count ?? 0) > 10).length ?? 0
-  const totalRated = (likesData?.length ?? 0) - unrated
-  const ratedPct = totalCaptions ? Math.round((totalRated / totalCaptions) * 100) : 0
+  const voteSummary = (voteSummaryRes.data as any)?.[0] ?? {
+    total_votes: 0, upvotes: 0, downvotes: 0, captions_rated: 0, raters: 0,
+  }
+  const voteDistribution: { bucket: string; bucket_order: number; captions: number }[] =
+    (voteDistRes.data as any) ?? []
+  const topRatedCaptions: { content: string; profile_email: string; vote_count: number; net_score: number; upvotes: number; downvotes: number }[] =
+    ((topRatedRes.data as any) ?? []).slice(0, 5)
+
+  const ratedPct = totalCaptions ? Math.round((voteSummary.captions_rated / totalCaptions) * 100) : 0
 
   // Top captioners — count by profile_id
   const profileCounts: Record<string, number> = {}
   topCaptioners?.forEach((c) => {
     if (c.profile_id) profileCounts[c.profile_id] = (profileCounts[c.profile_id] || 0) + 1
   })
-  const sortedProfiles = Object.entries(profileCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-
-  // Collect all profile IDs we need to look up (captioners + top rated caption authors)
-  const captionerIds = sortedProfiles.map(([id]) => id)
-  const ratedAuthorIds = (topRatedCaptions ?? []).map((c) => c.profile_id).filter(Boolean) as string[]
-  const allProfileIds = [...new Set([...captionerIds, ...ratedAuthorIds])]
-
-  const { data: profileNames } = allProfileIds.length
-    ? await adminClient.from('profiles').select('id, first_name, last_name, email').in('id', allProfileIds)
+  const sortedProfiles = Object.entries(profileCounts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  const topIds = sortedProfiles.map(([id]) => id)
+  const { data: profileNames } = topIds.length
+    ? await adminClient.from('profiles').select('id, first_name, last_name, email').in('id', topIds)
     : { data: [] }
-
-  const resolveAuthor = (id: string | null) => {
-    if (!id) return 'Unknown'
-    const p = profileNames?.find((x) => x.id === id)
-    if (!p) return 'Unknown'
-    return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email || 'Anonymous'
-  }
 
   const leaderboard = sortedProfiles.map(([id, count]) => {
     const p = profileNames?.find((x) => x.id === id)
@@ -73,21 +61,16 @@ async function getDashboardStats() {
     }
   })
 
-  // Recent 7 days vs prior 7 days
+  // Weekly caption creation
   const now = new Date()
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString()
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000).toISOString()
 
   const { count: recentCaptions } = await adminClient
-    .from('captions')
-    .select('*', { count: 'exact', head: true })
-    .gte('created_datetime_utc', sevenDaysAgo)
-
+    .from('captions').select('*', { count: 'exact', head: true }).gte('created_datetime_utc', sevenDaysAgo)
   const { count: priorCaptions } = await adminClient
-    .from('captions')
-    .select('*', { count: 'exact', head: true })
-    .gte('created_datetime_utc', fourteenDaysAgo)
-    .lt('created_datetime_utc', sevenDaysAgo)
+    .from('captions').select('*', { count: 'exact', head: true })
+    .gte('created_datetime_utc', fourteenDaysAgo).lt('created_datetime_utc', sevenDaysAgo)
 
   return {
     totalProfiles: totalProfiles ?? 0,
@@ -98,18 +81,10 @@ async function getDashboardStats() {
     studyUsers: studyUsers ?? 0,
     superadmins: superadmins ?? 0,
     commonImages: commonImages ?? 0,
-    totalLikes,
-    avgLikes,
-    totalRated,
-    unrated,
-    rated1to5,
-    rated6to10,
-    ratedOver10,
+    voteSummary,
+    voteDistribution,
+    topRatedCaptions,
     ratedPct,
-    topRatedCaptions: (topRatedCaptions ?? []).map((c) => ({
-      ...c,
-      authorName: resolveAuthor(c.profile_id),
-    })),
     leaderboard,
     recentCaptions: recentCaptions ?? 0,
     priorCaptions: priorCaptions ?? 0,
@@ -121,10 +96,9 @@ async function getDashboardStats() {
 
 export default async function DashboardPage() {
   const stats = await getDashboardStats()
-
   const velocityDelta = stats.recentCaptions - stats.priorCaptions
   const velocityUp = velocityDelta >= 0
-  const maxBucket = Math.max(stats.unrated, stats.rated1to5, stats.rated6to10, stats.ratedOver10, 1)
+  const maxBucket = Math.max(...stats.voteDistribution.map((b) => b.captions), 1)
 
   return (
     <div>
@@ -140,7 +114,6 @@ export default async function DashboardPage() {
           <div className="stat-value">{stats.totalProfiles.toLocaleString()}</div>
           <div className="stat-sub">{stats.studyRate}% enrolled in study</div>
         </div>
-
         <div className="stat-card">
           <div className="stat-label">Captions Written</div>
           <div className="stat-value accent">{stats.totalCaptions.toLocaleString()}</div>
@@ -148,76 +121,56 @@ export default async function DashboardPage() {
             {velocityUp ? '↑' : '↓'} {Math.abs(velocityDelta)} vs last week
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-label">Images in Library</div>
           <div className="stat-value">{stats.totalImages.toLocaleString()}</div>
           <div className="stat-sub">{stats.commonImages} available to all users</div>
         </div>
-
         <div className="stat-card">
-          <div className="stat-label">Total Likes Given</div>
-          <div className="stat-value">{stats.totalLikes.toLocaleString()}</div>
-          <div className="stat-sub">avg {stats.avgLikes} likes per caption</div>
+          <div className="stat-label">Total Votes Cast</div>
+          <div className="stat-value">{stats.voteSummary.total_votes.toLocaleString()}</div>
+          <div className="stat-sub">
+            ↑ {stats.voteSummary.upvotes.toLocaleString()} · ↓ {stats.voteSummary.downvotes.toLocaleString()}
+          </div>
         </div>
-
         <div className="stat-card">
-          <div className="stat-label">Captions Liked</div>
+          <div className="stat-label">Captions Voted On</div>
           <div className="stat-value accent">{stats.ratedPct}%</div>
-          <div className="stat-sub">{stats.totalRated.toLocaleString()} of {stats.totalCaptions.toLocaleString()} have at least 1 like</div>
+          <div className="stat-sub">{stats.voteSummary.captions_rated.toLocaleString()} of {stats.totalCaptions.toLocaleString()} received votes</div>
         </div>
-
         <div className="stat-card">
-          <div className="stat-label">Study Enrollment</div>
-          <div className="stat-value">{stats.studyRate}%</div>
-          <div className="stat-sub">{stats.studyUsers} of {stats.totalProfiles} users in the study</div>
+          <div className="stat-label">Active Voters</div>
+          <div className="stat-value">{stats.voteSummary.raters.toLocaleString()}</div>
+          <div className="stat-sub">unique users who have voted</div>
         </div>
       </div>
 
-      {/* Rating distribution + top rated side by side */}
+      {/* Vote distribution + visibility */}
       <div className="two-col" style={{ marginBottom: '0' }}>
-        {/* Rating distribution */}
         <div className="section">
           <div className="section-header">
-            <span className="section-title">Like Distribution</span>
-            <span className="badge badge-amber">{stats.totalCaptions} captions total</span>
+            <span className="section-title">Vote Distribution</span>
+            <span className="badge badge-amber">{stats.voteSummary.captions_rated.toLocaleString()} captions voted on</span>
           </div>
           <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
-            How many captions fall into each like-count range
+            How many captions fall into each vote-count range
           </div>
           <div className="bar-chart">
-            <div className="bar-row">
-              <span className="bar-label" style={{ color: 'var(--text-muted)' }}>No likes</span>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${(stats.unrated / maxBucket) * 100}%`, background: 'var(--text-muted)' }} />
-              </div>
-              <span className="bar-value">{stats.unrated}</span>
-            </div>
-            <div className="bar-row">
-              <span className="bar-label" style={{ color: '#60a5fa' }}>1–5 likes</span>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${(stats.rated1to5 / maxBucket) * 100}%`, background: '#60a5fa' }} />
-              </div>
-              <span className="bar-value">{stats.rated1to5}</span>
-            </div>
-            <div className="bar-row">
-              <span className="bar-label" style={{ color: '#34d399' }}>6–10 likes</span>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${(stats.rated6to10 / maxBucket) * 100}%`, background: '#34d399' }} />
-              </div>
-              <span className="bar-value">{stats.rated6to10}</span>
-            </div>
-            <div className="bar-row">
-              <span className="bar-label" style={{ color: 'var(--accent)' }}>10+ likes</span>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${(stats.ratedOver10 / maxBucket) * 100}%` }} />
-              </div>
-              <span className="bar-value">{stats.ratedOver10}</span>
-            </div>
+            {stats.voteDistribution.map((bucket, i) => {
+              const colors = ['#60a5fa', '#34d399', 'var(--accent)', '#f472b6', '#a78bfa']
+              return (
+                <div key={bucket.bucket} className="bar-row">
+                  <span className="bar-label" style={{ color: colors[i] }}>{bucket.bucket}</span>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${(bucket.captions / maxBucket) * 100}%`, background: colors[i] }} />
+                  </div>
+                  <span className="bar-value">{bucket.captions.toLocaleString()}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        {/* Caption visibility */}
         <div>
           <div className="section" style={{ marginBottom: '24px' }}>
             <div className="section-header">
@@ -278,27 +231,23 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Top Rated Captions */}
+      {/* Top rated captions */}
       {stats.topRatedCaptions.length > 0 && (
         <div className="section" style={{ marginTop: '24px', marginBottom: '24px' }}>
           <div className="section-header">
-            <span className="section-title">Most Liked Captions</span>
-            <span className="badge badge-amber">top 5 by like count</span>
+            <span className="section-title">Most Voted Captions</span>
+            <span className="badge badge-amber">top 5 by vote count</span>
           </div>
           <div style={{ padding: '12px 24px 4px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
-            The captions that received the most likes from other users
+            Captions with the most total votes (upvotes + downvotes). Net score = upvotes − downvotes.
           </div>
           {stats.topRatedCaptions.map((caption, i) => (
             <div key={i} className="caption-spotlight" style={{ borderBottom: i < stats.topRatedCaptions.length - 1 ? '1px solid var(--border)' : 'none' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                 <div style={{
-                  fontFamily: 'Syne, sans-serif',
-                  fontSize: '20px',
-                  fontWeight: 800,
+                  fontFamily: 'Syne, sans-serif', fontSize: '20px', fontWeight: 800,
                   color: i === 0 ? 'var(--accent)' : 'var(--text-muted)',
-                  minWidth: '28px',
-                  lineHeight: 1,
-                  paddingTop: '2px',
+                  minWidth: '28px', lineHeight: 1, paddingTop: '2px',
                 }}>
                   {i === 0 ? '★' : `${i + 1}`}
                 </div>
@@ -307,8 +256,11 @@ export default async function DashboardPage() {
                     {caption.content ?? '(no content)'}
                   </div>
                   <div className="caption-spotlight-meta">
-                    <span style={{ color: 'var(--accent)', fontWeight: 600 }}>♥ {caption.like_count} likes</span>
-                    <span>by {caption.authorName}</span>
+                    <span style={{ color: '#4ade80', fontWeight: 600 }}>↑ {caption.upvotes}</span>
+                    <span style={{ color: '#f87171', fontWeight: 600 }}>↓ {caption.downvotes}</span>
+                    <span style={{ color: 'var(--accent)', fontWeight: 600 }}>net +{caption.net_score}</span>
+                    <span>{caption.vote_count} total votes</span>
+                    <span>by {caption.profile_email}</span>
                   </div>
                 </div>
               </div>
@@ -318,7 +270,6 @@ export default async function DashboardPage() {
       )}
 
       <div className="two-col">
-        {/* Most active writers */}
         <div className="section">
           <div className="section-header">
             <span className="section-title">Most Active Writers</span>
@@ -333,9 +284,7 @@ export default async function DashboardPage() {
             <ul className="leaderboard">
               {stats.leaderboard.map((entry, i) => (
                 <li key={entry.id} className="leaderboard-item">
-                  <span className={`leaderboard-rank ${i === 0 ? 'top' : ''}`}>
-                    {i === 0 ? '★' : `${i + 1}`}
-                  </span>
+                  <span className={`leaderboard-rank ${i === 0 ? 'top' : ''}`}>{i === 0 ? '★' : `${i + 1}`}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="leaderboard-name truncate">{entry.name}</div>
                     <div className="leaderboard-email truncate">{entry.email}</div>
@@ -347,7 +296,6 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* Weekly caption creation */}
         <div className="section">
           <div className="section-header">
             <span className="section-title">New Captions This Week</span>

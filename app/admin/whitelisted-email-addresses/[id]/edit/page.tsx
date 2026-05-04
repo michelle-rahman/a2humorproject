@@ -9,7 +9,7 @@ async function updateWhitelistedEmail(formData: FormData) {
   const email = formData.get('email') as string;
 
   const { error } = await adminClient
-    .from('whitelisted_email_addresses')
+    .from('whitelist_email_addresses')
     .update({ email_address: email })
     .eq('id', id);
 
@@ -23,7 +23,7 @@ async function updateWhitelistedEmail(formData: FormData) {
 
 export default async function EditWhitelistedEmailPage({ params }: { params: { id: string } }) {
   const { data: email, error } = await adminClient
-    .from('whitelisted_email_addresses')
+    .from('whitelist_email_addresses')
     .select('*')
     .eq('id', params.id)
     .single();

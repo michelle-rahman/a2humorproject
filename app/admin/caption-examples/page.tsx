@@ -1,31 +1,28 @@
-
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
+import DeleteCaptionExampleButton from './DeleteCaptionExampleButton'
 
 export default async function CaptionExamplesPage() {
   const { data: examples, error } = await adminClient
     .from('caption_examples')
-    .select('*')
-    .order('created_datetime_utc', { ascending: false });
+    .select('id, caption, explanation, priority, created_datetime_utc')
+    .order('priority', { ascending: true })
 
   if (error) {
-    console.error('Error fetching caption examples:', error.message);
     return (
       <div>
         <div className="page-header flex items-center justify-between">
           <div>
             <h1 className="page-title">Caption Examples</h1>
-            <p className="page-subtitle">Manage the list of caption examples.</p>
+            <p className="page-subtitle">Manage caption examples used for LLM training context.</p>
           </div>
-          <Link href="/admin/caption-examples/new" className="btn btn-primary">
-            New Example
-          </Link>
+          <Link href="/admin/caption-examples/new" className="btn btn-primary">New Example</Link>
         </div>
-        <div className="section">
-          <p>Error fetching caption examples: {error.message}</p>
+        <div className="section p-6">
+          <p className="text-danger">Error: {error.message}</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -33,33 +30,42 @@ export default async function CaptionExamplesPage() {
       <div className="page-header flex items-center justify-between">
         <div>
           <h1 className="page-title">Caption Examples</h1>
-          <p className="page-subtitle">Manage the list of caption examples.</p>
+          <p className="page-subtitle">// {examples?.length ?? 0} examples · used as LLM training context</p>
         </div>
-        <Link href="/admin/caption-examples/new" className="btn btn-primary">
-          New Example
-        </Link>
+        <Link href="/admin/caption-examples/new" className="btn btn-primary">New Example</Link>
       </div>
 
       <div className="section">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Content</th>
-              <th>Created At</th>
+              <th>Priority</th>
+              <th>Caption</th>
+              <th>Explanation</th>
+              <th>Created</th>
               <th style={{ width: '120px' }}></th>
             </tr>
           </thead>
           <tbody>
             {examples?.length === 0 ? (
               <tr>
-                <td colSpan={3} className="empty-state">No caption examples found.</td>
+                <td colSpan={5} className="empty-state">No caption examples found.</td>
               </tr>
             ) : (
               examples?.map((example) => (
                 <tr key={example.id}>
                   <td>
-                    <span style={{ fontWeight: 500, color: 'var(--text)' }}>
-                      {example.content}
+                    <span className="badge badge-gray">{example.priority ?? '—'}</span>
+                  </td>
+                  <td style={{ maxWidth: '300px' }}>
+                    <span style={{ fontWeight: 500, color: 'var(--text)', fontSize: '13px' }}>
+                      {example.caption ?? <em className="text-muted">(empty)</em>}
+                    </span>
+                  </td>
+                  <td style={{ maxWidth: '350px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={example.explanation ?? ''}>
+                      {example.explanation ?? '—'}
                     </span>
                   </td>
                   <td>
@@ -69,10 +75,9 @@ export default async function CaptionExamplesPage() {
                       })}
                     </span>
                   </td>
-                  <td className="text-right">
-                    <Link href={`/admin/caption-examples/${example.id}/edit`} className="btn btn-ghost btn-sm">
-                      Edit
-                    </Link>
+                  <td style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <Link href={`/admin/caption-examples/${example.id}/edit`} className="btn btn-ghost btn-sm">Edit</Link>
+                    <DeleteCaptionExampleButton exampleId={String(example.id)} />
                   </td>
                 </tr>
               ))
@@ -81,5 +86,5 @@ export default async function CaptionExamplesPage() {
         </table>
       </div>
     </div>
-  );
+  )
 }

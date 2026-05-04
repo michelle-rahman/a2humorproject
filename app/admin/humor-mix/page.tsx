@@ -1,161 +1,160 @@
-
 import { adminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-// Define the server action for updating humor mix
-async function updateHumorMix(formData: FormData) {
+async function updateHumorFlavorMix(formData: FormData) {
   'use server'
-
-  const id = formData.get('id') as string;
-  const default_flavor_id = formData.get('default_flavor_id') as string;
-  const default_step_id = formData.get('default_step_id') as string;
-  const is_active = formData.get('is_active') === 'true';
+  const id = formData.get('id') as string
+  const caption_count = parseInt(formData.get('caption_count') as string, 10)
 
   const { error } = await adminClient
-    .from('humor_mix')
-    .update({
-      default_flavor_id: default_flavor_id || null,
-      default_step_id: default_step_id || null,
-      is_active: is_active,
-      modified_datetime_utc: new Date().toISOString(),
-    })
-    .eq('id', id);
+    .from('humor_flavor_mix')
+    .update({ caption_count })
+    .eq('id', id)
 
-  if (error) {
-    throw new Error(`Failed to update humor mix: ${error.message}`);
-  }
+  if (error) throw new Error(`Failed to update: ${error.message}`)
+  revalidatePath('/admin/humor-mix')
+  redirect('/admin/humor-mix')
+}
 
-  revalidatePath('/admin/humor-mix');
-  redirect('/admin/humor-mix');
+async function deleteHumorFlavorMix(formData: FormData) {
+  'use server'
+  const id = formData.get('id') as string
+
+  const { error } = await adminClient
+    .from('humor_flavor_mix')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw new Error(`Failed to delete: ${error.message}`)
+  revalidatePath('/admin/humor-mix')
+  redirect('/admin/humor-mix')
+}
+
+async function addHumorFlavorMix(formData: FormData) {
+  'use server'
+  const humor_flavor_id = parseInt(formData.get('humor_flavor_id') as string, 10)
+  const caption_count = parseInt(formData.get('caption_count') as string, 10)
+
+  const { error } = await adminClient
+    .from('humor_flavor_mix')
+    .insert({ humor_flavor_id, caption_count })
+
+  if (error) throw new Error(`Failed to add: ${error.message}`)
+  revalidatePath('/admin/humor-mix')
+  redirect('/admin/humor-mix')
 }
 
 export default async function HumorMixPage() {
-  const { data: humorMix, error: humorMixError } = await adminClient
-    .from('humor_mix')
-    .select('*')
-    .single(); // Assuming a single humor mix configuration
+  const { data: mix, error } = await adminClient
+    .from('humor_flavor_mix')
+    .select('*, humor_flavors(slug, description)')
+    .order('caption_count', { ascending: false })
 
-  const { data: humorFlavors, error: flavorsError } = await adminClient
+  const { data: allFlavors } = await adminClient
     .from('humor_flavors')
-    .select('id, name')
-    .order('name', { ascending: true });
-
-  const { data: humorFlavorSteps, error: stepsError } = await adminClient
-    .from('humor_flavor_steps')
-    .select('id, step_name, humor_flavors(name)')
-    .order('step_name', { ascending: true });
-
-  if (humorMixError) {
-    console.error('Error fetching humor mix:', humorMixError.message);
-  }
-  if (flavorsError) {
-    console.error('Error fetching humor flavors:', flavorsError.message);
-  }
-  if (stepsError) {
-    console.error('Error fetching humor flavor steps:', stepsError.message);
-  }
-
-  const flavors = humorFlavors || [];
-  const steps = humorFlavorSteps || [];
+    .select('id, slug')
+    .order('slug', { ascending: true })
 
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title">Humor Mix</h1>
-        <p className="page-subtitle">Manage the global humor mix settings.</p>
+        <p className="page-subtitle">Configure which humor flavors are active and how many captions each should generate.</p>
       </div>
 
-      {humorMixError && <div className="login-error">Error loading humor mix: {humorMixError.message}</div>}
+      {error && <div className="login-error">Error: {error.message}</div>}
 
-      {humorMix ? (
-        <div className="section p-6">
-          <form action={updateHumorMix}>
-            <input type="hidden" name="id" value={humorMix.id} />
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label" htmlFor="default_flavor_id">Default Humor Flavor</label>
-                <select
-                  name="default_flavor_id"
-                  id="default_flavor_id"
-                  className="form-input"
-                  defaultValue={humorMix.default_flavor_id || ''}
-                >
-                  <option value="">None</option>
-                  {flavors.map((flavor) => (
-                    <option key={flavor.id} value={flavor.id}>
-                      {flavor.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="default_step_id">Default Humor Step</label>
-                <select
-                  name="default_step_id"
-                  id="default_step_id"
-                  className="form-input"
-                  defaultValue={humorMix.default_step_id || ''}
-                >
-                  <option value="">None</option>
-                  {steps.map((step) => (
-                    <option key={step.id} value={step.id}>
-                      {/* @ts-ignore */}
-                      {step.humor_flavors?.name ? `${step.humor_flavors.name} - ${step.step_name}` : step.step_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ marginBottom: '10px', display: 'block' }}>Status</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div className="form-toggle-row">
-                    <span className="form-toggle-label">Is Active</span>
-                    <input type="hidden" name="is_active" value={humorMix.is_active ? 'true' : 'false'} />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                        input.value = input.value === 'true' ? 'false' : 'true';
-                        e.currentTarget.style.background = input.value === 'true' ? 'var(--accent)' : 'var(--surface-3)';
-                        const span = e.currentTarget.querySelector('span') as HTMLSpanElement;
-                        span.style.left = input.value === 'true' ? '23px' : '3px';
-                      }}
-                      style={{
-                        width: '44px', height: '24px',
-                        borderRadius: '12px',
-                        background: humorMix.is_active ? 'var(--accent)' : 'var(--surface-3)',
-                        border: 'none', cursor: 'pointer',
-                        position: 'relative', transition: 'background 0.2s',
-                      }}
-                    >
-                      <span style={{
-                        position: 'absolute', top: '3px',
-                        left: humorMix.is_active ? '23px' : '3px',
-                        width: '18px', height: '18px',
-                        borderRadius: '50%', background: '#fff',
-                        transition: 'left 0.2s',
-                      }} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', paddingTop: '8px' }}>
-                <button type="submit" className="btn btn-primary">
-                  Save Changes
-                </button>
-              </div>
+      {/* Add new entry */}
+      <div className="section p-6" style={{ marginBottom: '24px' }}>
+        <div className="section-title" style={{ marginBottom: '16px' }}>Add Flavor to Mix</div>
+        <form action={addHumorFlavorMix}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ flex: 2, minWidth: '200px' }}>
+              <label className="form-label">Humor Flavor</label>
+              <select name="humor_flavor_id" className="form-input" required>
+                <option value="">Select a flavor…</option>
+                {allFlavors?.map((f) => (
+                  <option key={f.id} value={f.id}>{f.slug}</option>
+                ))}
+              </select>
             </div>
-          </form>
-        </div>
-      ) : (
-        <div className="section">
-          <div className="empty-state">No humor mix configuration found.</div>
-        </div>
-      )}
+            <div className="form-group" style={{ flex: 1, minWidth: '120px' }}>
+              <label className="form-label">Caption Count</label>
+              <input name="caption_count" type="number" min="1" className="form-input" defaultValue={1} required />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ marginBottom: '0' }}>Add</button>
+          </div>
+        </form>
+      </div>
+
+      {/* Current mix */}
+      <div className="section">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Humor Flavor</th>
+              <th>Description</th>
+              <th>Caption Count</th>
+              <th>Added</th>
+              <th style={{ width: '200px' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {mix?.length === 0 ? (
+              <tr><td colSpan={5} className="empty-state">No flavors in the mix yet.</td></tr>
+            ) : (
+              mix?.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <span style={{ fontWeight: 500, color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}>
+                      {/* @ts-ignore */}
+                      {row.humor_flavors?.slug ?? `flavor #${row.humor_flavor_id}`}
+                    </span>
+                  </td>
+                  <td style={{ maxWidth: '300px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-dim)' }} className="truncate">
+                      {/* @ts-ignore */}
+                      {row.humor_flavors?.description ?? '—'}
+                    </span>
+                  </td>
+                  <td>
+                    <form action={updateHumorFlavorMix} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="hidden" name="id" value={row.id} />
+                      <input
+                        name="caption_count"
+                        type="number"
+                        min="1"
+                        defaultValue={row.caption_count}
+                        className="form-input"
+                        style={{ width: '80px', padding: '5px 10px' }}
+                      />
+                      <button type="submit" className="btn btn-ghost btn-sm">Save</button>
+                    </form>
+                  </td>
+                  <td>
+                    <span className="mono text-muted" style={{ fontSize: '11px' }}>
+                      {new Date(row.created_datetime_utc).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <form action={deleteHumorFlavorMix}>
+                      <input type="hidden" name="id" value={row.id} />
+                      <button
+                        type="submit"
+                        className="btn btn-danger btn-sm"
+                        onClick={(e) => { if (!confirm('Remove this flavor from the mix?')) e.preventDefault() }}
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
-  );
+  )
 }

@@ -1,22 +1,20 @@
-
 import { adminClient } from '@/lib/supabase/admin'
-import Link from 'next/link'
 
 export default async function HumorFlavorStepsPage() {
   const { data: steps, error } = await adminClient
     .from('humor_flavor_steps')
-    .select('*, humor_flavors(name)')
-    .order('step_number', { ascending: true });
+    .select('id, order_by, description, llm_system_prompt, llm_user_prompt, humor_flavor_id, humor_flavors(slug), created_datetime_utc')
+    .order('order_by', { ascending: true })
 
   if (error) {
-    console.error('Error fetching humor flavor steps:', error.message);
+    console.error('Error fetching humor flavor steps:', error.message)
   }
 
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title">Humor Flavor Steps</h1>
-        <p className="page-subtitle">Read-only list of humor flavor steps.</p>
+        <p className="page-subtitle">// read-only · LLM prompt steps within each humor flavor</p>
       </div>
 
       <div className="section">
@@ -24,10 +22,10 @@ export default async function HumorFlavorStepsPage() {
           <thead>
             <tr>
               <th>Flavor</th>
-              <th>Step</th>
-              <th>Name</th>
-              <th>Instruction</th>
-              <th>Created At</th>
+              <th>Order</th>
+              <th>Description</th>
+              <th>System Prompt (preview)</th>
+              <th>Created</th>
             </tr>
           </thead>
           <tbody>
@@ -39,13 +37,30 @@ export default async function HumorFlavorStepsPage() {
               steps?.map((step) => (
                 <tr key={step.id}>
                   <td>
-                    <span style={{ fontWeight: 500, color: 'var(--text)' }}>
-                      {step.humor_flavors.name}
+                    <span style={{ fontWeight: 500, color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}>
+                      {/* @ts-ignore */}
+                      {step.humor_flavors?.slug ?? `flavor #${step.humor_flavor_id}`}
                     </span>
                   </td>
-                  <td>{step.step_number}</td>
-                  <td>{step.step_name}</td>
-                  <td>{step.instruction_text}</td>
+                  <td>
+                    <span className="badge badge-gray">{step.order_by}</span>
+                  </td>
+                  <td style={{ maxWidth: '200px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                      {step.description ?? <em className="text-muted">—</em>}
+                    </span>
+                  </td>
+                  <td style={{ maxWidth: '300px' }}>
+                    <span
+                      className="mono"
+                      style={{ fontSize: '11px', color: 'var(--text-dim)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      title={step.llm_system_prompt ?? ''}
+                    >
+                      {step.llm_system_prompt
+                        ? step.llm_system_prompt.slice(0, 120) + (step.llm_system_prompt.length > 120 ? '…' : '')
+                        : '—'}
+                    </span>
+                  </td>
                   <td>
                     <span className="mono text-muted" style={{ fontSize: '11px' }}>
                       {new Date(step.created_datetime_utc).toLocaleDateString('en-US', {
@@ -60,5 +75,5 @@ export default async function HumorFlavorStepsPage() {
         </table>
       </div>
     </div>
-  );
+  )
 }
